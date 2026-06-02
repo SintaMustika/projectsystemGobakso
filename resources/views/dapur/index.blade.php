@@ -28,8 +28,8 @@
                                     <span class="badge bg-primary">PAID</span>
                                 @elseif($order->status === 'processing')
                                     <span class="badge bg-warning text-dark">PROCESSING</span>
-                                @elseif($order->status === 'done')
-                                    <span class="badge bg-success">DONE</span>
+                                @elseif($order->status === 'completed')
+                                    <span class="badge bg-success">COMPLETED</span>
                                 @else
                                     <span class="badge bg-secondary">{{ strtoupper($order->status) }}</span>
                                 @endif
@@ -63,7 +63,7 @@
                                 @endif
 
                                 @if($order->status === 'processing')
-                                    <form action="{{ route('dapur.done', $order) }}" method="POST">
+                                    <form action="{{ route('dapur.complete', $order) }}" method="POST">
                                         @csrf
                                         <button class="btn btn-sm btn-success">Selesai</button>
                                     </form>

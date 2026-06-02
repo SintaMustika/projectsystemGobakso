@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Order;
+use Illuminate\Http\RedirectResponse;
 
 class KitchenController extends Controller
 {
@@ -15,7 +16,7 @@ class KitchenController extends Controller
     public function index()
     {
         $orders = Order::with('details.menu')
-            ->whereIn('status', ['paid', 'processing'])
+            ->whereIn('status', [Order::STATUS_PAID, Order::STATUS_PROCESSING])
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -24,23 +25,31 @@ class KitchenController extends Controller
 
     public function process(Order $order)
     {
-        if ($order->status !== 'paid') {
+        if ($order->isCompleted()) {
+            return redirect()->back()->with('error', 'Order sudah selesai, tidak dapat diproses');
+        }
+
+        if ($order->status !== Order::STATUS_PAID) {
             return redirect()->back()->with('error', 'Order tidak dapat diproses');
         }
 
-        $order->status = 'processing';
+        $order->status = Order::STATUS_PROCESSING;
         $order->save();
 
         return redirect()->back()->with('success', 'Order sedang diproses');
     }
 
-    public function done(Order $order)
+    public function complete(Order $order)
     {
-        if ($order->status !== 'processing') {
+        if ($order->isCompleted()) {
+            return redirect()->back()->with('error', 'Order sudah selesai');
+        }
+
+        if ($order->status !== Order::STATUS_PROCESSING) {
             return redirect()->back()->with('error', 'Order tidak dapat diselesaikan');
         }
 
-        $order->status = 'done';
+        $order->status = Order::STATUS_COMPLETED;
         $order->save();
 
         return redirect()->back()->with('success', 'Order selesai');

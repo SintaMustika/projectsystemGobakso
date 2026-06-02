@@ -22,7 +22,7 @@ class ReportController extends Controller
         $end = $data['end_date'] ?? now()->toDateString();
 
         $query = Order::with('details.menu')
-            ->where('status', 'paid')
+            ->whereIn('status', [Order::STATUS_PAID, Order::STATUS_PROCESSING, Order::STATUS_COMPLETED])
             ->whereDate('created_at', '>=', $start)
             ->whereDate('created_at', '<=', $end)
             ->orderByDesc('created_at');
@@ -82,7 +82,7 @@ class ReportController extends Controller
         $start = $request->query('start_date');
         $end = $request->query('end_date');
 
-        $query = Order::where('status', 'paid')
+        $query = Order::whereIn('status', [Order::STATUS_PAID, Order::STATUS_PROCESSING, Order::STATUS_COMPLETED])
             ->with('details.menu')
             ->orderByDesc('created_at');
 
@@ -116,7 +116,7 @@ class ReportController extends Controller
         // If maatwebsite/excel isn't installed, fall back to CSV stream
         if (! class_exists(\Maatwebsite\Excel\Facades\Excel::class)) {
             $orders = Order::with('details.menu')
-                ->where('status', 'paid')
+                ->whereIn('status', [Order::STATUS_PAID, Order::STATUS_PROCESSING, Order::STATUS_COMPLETED])
                 ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
                 ->when($end, fn($q) => $q->whereDate('created_at', '<=', $end))
                 ->orderByDesc('created_at')

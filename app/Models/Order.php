@@ -20,6 +20,22 @@ class Order extends Model
         return $this->hasMany(OrderDetail::class);
     }
 
+    // Order statuses
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_PAID = 'paid';
+    public const STATUS_PROCESSING = 'processing';
+    public const STATUS_COMPLETED = 'completed';
+
+    public function isCompleted(): bool
+    {
+        return $this->status === self::STATUS_COMPLETED;
+    }
+
+    public function isProcessing(): bool
+    {
+        return $this->status === self::STATUS_PROCESSING;
+    }
+
     /**
      * Pay the order: deduct ingredients stock according to recipes and mark as paid.
      * Throws exception on insufficient stock.

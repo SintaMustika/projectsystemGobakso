@@ -119,5 +119,5 @@ Route::prefix('kasir')->name('kasir.')->middleware(['auth','role:kasir'])->group
 Route::prefix('dapur')->name('dapur.')->middleware(['auth','role:dapur'])->group(function () {
 	Route::get('/', [KitchenController::class, 'index'])->name('index');
 	Route::post('{order}/process', [KitchenController::class, 'process'])->name('process');
-	Route::post('{order}/done', [KitchenController::class, 'done'])->name('done');
+	Route::post('{order}/complete', [KitchenController::class, 'complete'])->name('complete');
 });

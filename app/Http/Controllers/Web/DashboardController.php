@@ -16,18 +16,18 @@ class DashboardController extends Controller
         $today = now()->toDateString();
 
         $totalSales = Order::whereDate('created_at', $today)
-            ->where('status', 'paid')
+            ->whereIn('status', [Order::STATUS_PAID, Order::STATUS_PROCESSING, Order::STATUS_COMPLETED])
             ->sum('total_price');
 
         // Count paid transactions for today
         $transactions = Order::whereDate('created_at', $today)
-            ->where('status', 'paid')
+            ->whereIn('status', [Order::STATUS_PAID, Order::STATUS_PROCESSING, Order::STATUS_COMPLETED])
             ->count();
 
         // Top 5 best-selling menus for today (by qty)
         $topMenus = OrderDetail::select('menu_id', DB::raw('SUM(qty) as total_qty'))
             ->join('orders', 'order_details.order_id', '=', 'orders.id')
-            ->where('orders.status', 'paid')
+            ->whereIn('orders.status', [Order::STATUS_PAID, Order::STATUS_PROCESSING, Order::STATUS_COMPLETED])
             ->whereDate('orders.created_at', $today)
             ->groupBy('menu_id')
             ->orderByDesc('total_qty')
@@ -36,7 +36,11 @@ class DashboardController extends Controller
             ->get();
 
         // Recent 5 orders (latest)
-        $recentOrders = Order::with('details.menu')->latest()->limit(5)->get();
+        $recentOrders = Order::with('details.menu')
+            ->whereIn('status', [Order::STATUS_PAID, Order::STATUS_PROCESSING, Order::STATUS_COMPLETED])
+            ->orderByDesc('created_at')
+            ->limit(5)
+            ->get();
 
         // Prepare 7-day sales data (last 7 days including today)
         $labels = [];
@@ -46,7 +50,7 @@ class DashboardController extends Controller
             $labels[] = $d->format('d M');
             $dateString = $d->toDateString();
             $total = Order::whereDate('created_at', $dateString)
-                ->where('status', 'paid')
+                ->whereIn('status', [Order::STATUS_PAID, Order::STATUS_PROCESSING, Order::STATUS_COMPLETED])
                 ->sum('total_price');
             $data[] = (float) $total;
         }
@@ -54,7 +58,7 @@ class DashboardController extends Controller
         // Calculate total profit for today
         $totalProfit = 0.0;
         $todayOrders = Order::whereDate('created_at', $today)
-            ->where('status', 'paid')
+            ->whereIn('status', [Order::STATUS_PAID, Order::STATUS_PROCESSING, Order::STATUS_COMPLETED])
             ->with('details.menu.recipes.ingredient')
             ->get();
 

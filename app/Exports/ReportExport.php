@@ -21,7 +21,9 @@ class ReportExport implements FromCollection, WithHeadings, WithMapping, ShouldA
 
     public function collection()
     {
-        $query = Order::where('status', 'paid')->with('details.menu')->orderByDesc('created_at');
+        $query = Order::whereIn('status', [Order::STATUS_PAID, Order::STATUS_PROCESSING, Order::STATUS_COMPLETED])
+            ->with('details.menu')
+            ->orderByDesc('created_at');
 
         if ($this->start && $this->end) {
             $query->whereBetween('created_at', [$this->start . ' 00:00:00', $this->end . ' 23:59:59']);
