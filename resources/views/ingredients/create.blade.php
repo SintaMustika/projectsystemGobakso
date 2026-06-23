@@ -11,8 +11,8 @@
     </div>
     <div class="mb-3">
       <label class="form-label">Stock Quantity</label>
-      <input name="stock_quantity" type="number" step="0.001" class="form-control" value="{{ old('stock_quantity') }}" required>
-      @error('stock_quantity')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+      <input class="form-control" value="0" readonly>
+      <div class="small text-muted">Stock diatur melalui transaksi Pembelian atau Produksi</div>
     </div>
     <div class="mb-3">
       <label class="form-label">Unit</label>

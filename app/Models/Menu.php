@@ -9,7 +9,7 @@ class Menu extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'price', 'image', 'is_available'];
+    protected $fillable = ['name', 'price', 'image', 'is_available', 'stock'];
 
     protected $casts = [
         'is_available' => 'boolean',
@@ -24,6 +24,11 @@ class Menu extends Model
     public function orderDetails()
     {
         return $this->hasMany(OrderDetail::class);
+    }
+
+    public function productions()
+    {
+        return $this->hasMany(Production::class);
     }
 
     /**

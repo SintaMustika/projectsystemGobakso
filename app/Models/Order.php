@@ -9,7 +9,16 @@ class Order extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['table_number', 'total_price', 'status'];
+    protected $fillable = [
+        'user_id',
+        'customer_name',
+        'table_number',
+        'notes',
+        'total_price',
+        'payment_method',
+        'payment_status',
+        'status',
+    ];
 
     protected $casts = [
         'total_price' => 'decimal:2',
@@ -20,8 +29,19 @@ class Order extends Model
         return $this->hasMany(OrderDetail::class);
     }
 
+    public function items()
+    {
+        return $this->hasMany(OrderItem::class, 'order_id');
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
     // Order statuses
     public const STATUS_PENDING = 'pending';
+    public const STATUS_WAITING = 'waiting';
     public const STATUS_PAID = 'paid';
     public const STATUS_PROCESSING = 'processing';
     public const STATUS_COMPLETED = 'completed';
@@ -42,36 +62,36 @@ class Order extends Model
      */
     public function pay()
     {
-        if ($this->status === 'paid') {
+        if ($this->payment_status === 'paid') {
             return $this;
         }
-
+        // New behavior: deduct menu stock only (menu already produced)
         return \Illuminate\Support\Facades\DB::transaction(function () {
             foreach ($this->details as $detail) {
-                $recipes = Recipe::where('menu_id', $detail->menu_id)->get();
-                foreach ($recipes as $recipe) {
-                    $ingredient = Ingredient::lockForUpdate()->find($recipe->ingredient_id);
-                    if (! $ingredient) {
-                        throw new \Exception('Ingredient not found for recipe');
-                    }
-                    $deduct = bcmul((string)$detail->qty, (string)$recipe->qty_usage, 3);
-                    $newStock = bcsub((string)$ingredient->stock_quantity, (string)$deduct, 3);
-                    if (bccomp($newStock, '0', 3) < 0) {
-                        throw new \Exception("Insufficient stock for {$ingredient->item_name}");
-                    }
-                    $ingredient->stock_quantity = $newStock;
-                    $ingredient->save();
+                $menu = Menu::lockForUpdate()->find($detail->menu_id);
+                if (! $menu) {
+                    throw new \Exception('Menu not found for order detail');
+                }
 
-                    // If stock reaches zero, mark all menus that use this ingredient as unavailable
-                    if (bccomp((string)$newStock, '0', 3) === 0) {
-                        Menu::whereHas('recipes', function ($q) use ($ingredient) {
-                            $q->where('ingredient_id', $ingredient->id);
-                        })->update(['is_available' => false]);
-                    }
+                $qty = (int) $detail->qty;
+                $stockBefore = (int) $menu->stock;
+                if ($stockBefore < $qty) {
+                    throw new \Exception("Stok menu tidak cukup untuk {$menu->name}. Dibutuhkan: {$qty}, tersedia: {$stockBefore}");
+                }
+
+                $menu->stock = $stockBefore - $qty;
+                $menu->save();
+
+                if ($menu->stock <= 0) {
+                    $menu->is_available = false;
+                    $menu->save();
                 }
             }
 
-            $this->status = 'paid';
+            $this->payment_status = 'paid';
+            if (in_array($this->status, [self::STATUS_PENDING, self::STATUS_WAITING, self::STATUS_PAID], true)) {
+                $this->status = self::STATUS_PENDING;
+            }
             $this->save();
 
             return $this;

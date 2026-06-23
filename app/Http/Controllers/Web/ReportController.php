@@ -30,17 +30,33 @@ class ReportController extends Controller
         $totalSales = (clone $query)->sum('total_price');
         $transactions = (clone $query)->count();
 
-        // Calculate total profit for the selected range
+        // Calculate totals (sales, modal, profit) for the selected range using stored fields when available
         $totalProfit = 0.0;
-        $ordersForProfit = (clone $query)->get();
-        foreach ($ordersForProfit as $order) {
-            $order->load('details.menu.recipes.ingredient');
+        $totalModal = 0.0;
+        $ordersForCalc = (clone $query)->with('details')->get();
+        foreach ($ordersForCalc as $order) {
             foreach ($order->details as $d) {
-                $menu = $d->menu;
-                if (!$menu) continue;
-                $unitProfit = $menu->profitPerUnit();
-                if (is_null($unitProfit)) continue;
-                $totalProfit += $unitProfit * $d->qty;
+                $qty = (int)$d->qty;
+                if (isset($d->profit) && $d->profit != 0) {
+                    $totalProfit += (float)$d->profit;
+                } else {
+                    // fallback to menu-based calc
+                    $menu = $d->menu;
+                    if ($menu) {
+                        $unitProfit = $menu->profitPerUnit();
+                        if (!is_null($unitProfit)) $totalProfit += $unitProfit * $qty;
+                    }
+                }
+
+                if (isset($d->capital_price) && $d->capital_price != 0) {
+                    $totalModal += (float)$d->capital_price * $qty;
+                } else {
+                    $menu = $d->menu;
+                    if ($menu) {
+                        $unitCost = $menu->materialCost();
+                        if (!is_null($unitCost)) $totalModal += $unitCost * $qty;
+                    }
+                }
             }
         }
 
@@ -55,12 +71,18 @@ class ReportController extends Controller
 
             $callback = function () use ($orders) {
                 $out = fopen('php://output', 'w');
-                fputcsv($out, ['Order ID','Date','Table','Total Price','Status','Items']);
+                fputcsv($out, ['Order ID','Date','Table','Total Price','Modal','Profit','Status','Items']);
                 foreach ($orders as $order) {
+                    $modal = 0; $profit = 0;
+                    foreach ($order->details as $d) {
+                        $qty = (int)$d->qty;
+                        $modal += (float)($d->capital_price ?? 0) * $qty;
+                        $profit += (float)($d->profit ?? 0);
+                    }
                     $items = $order->details->map(function ($d) {
-                        return $d->menu->name.' x'.$d->qty;
+                        return ($d->menu->name ?? 'Unknown').' x'.$d->qty;
                     })->implode(' | ');
-                    fputcsv($out, [$order->id, $order->created_at->toDateTimeString(), $order->table_number, $order->total_price, $order->status, $items]);
+                    fputcsv($out, [$order->id, $order->created_at->toDateTimeString(), $order->table_number, $order->total_price, $modal, $profit, $order->status, $items]);
                 }
                 fclose($out);
             };

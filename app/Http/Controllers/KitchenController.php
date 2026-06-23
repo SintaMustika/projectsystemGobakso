@@ -15,9 +15,13 @@ class KitchenController extends Controller
 
     public function index()
     {
-        $orders = Order::with('details.menu')
-            ->whereIn('status', [Order::STATUS_PAID, Order::STATUS_PROCESSING])
-            ->orderBy('created_at', 'asc')
+        $orders = Order::with('items.menu')
+            ->whereIn('status', [
+                Order::STATUS_PENDING,
+                Order::STATUS_WAITING,
+                Order::STATUS_PROCESSING,
+            ])
+            ->latest()
             ->get();
 
         return view('dapur.index', compact('orders'));
@@ -29,7 +33,7 @@ class KitchenController extends Controller
             return redirect()->back()->with('error', 'Order sudah selesai, tidak dapat diproses');
         }
 
-        if ($order->status !== Order::STATUS_PAID) {
+        if (! in_array($order->status, [Order::STATUS_PENDING, Order::STATUS_WAITING], true)) {
             return redirect()->back()->with('error', 'Order tidak dapat diproses');
         }
 

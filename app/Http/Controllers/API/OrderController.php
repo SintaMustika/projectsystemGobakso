@@ -37,12 +37,16 @@ class OrderController extends Controller
 
         foreach ($data['items'] as $item) {
             $menu = Menu::findOrFail($item['menu_id']);
-            $linePrice = $menu->price * $item['qty'];
+            $price = (float) $menu->price;
+            $capital = (float) ($menu->cost_price ?? 0);
+            $linePrice = $price * $item['qty'];
             $total += $linePrice;
             $details[] = new OrderDetail([
                 'menu_id' => $menu->id,
                 'qty' => $item['qty'],
-                'price' => $menu->price,
+                'price' => $price,
+                'capital_price' => $capital,
+                'profit' => ($price - $capital) * $item['qty'],
             ]);
         }
 

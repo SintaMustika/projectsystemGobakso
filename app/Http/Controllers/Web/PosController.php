@@ -103,76 +103,27 @@ class PosController extends Controller
             ];
         }
 
-        // Build aggregated ingredient requirements from cart
-        $requirements = [];
-        $requirements_meta = []; // for logging which menus contributed
-        foreach ($normalized as $it) {
-            $recipesQuery = \App\Models\Recipe::where('menu_id', $it['menu_id']);
-            Log::info('Recipe query for menu', ['menu_id' => $it['menu_id'], 'sql' => $recipesQuery->toSql(), 'bindings' => $recipesQuery->getBindings()]);
-            $recipes = $recipesQuery->get();
-
-            Log::info('Recipes fetched', ['menu_id' => $it['menu_id'], 'count' => $recipes->count()]);
-
-            if ($recipes->isEmpty()) {
-                $menuName = optional($it['menu'])->name ?? 'unknown';
-                $msg = 'Menu belum memiliki resep bahan';
-                Log::error('Menu belum memiliki resep bahan', ['menu_id' => $it['menu_id'], 'menu_name' => $menuName]);
-                return redirect()->back()->with('error', $msg);
-            }
-
-                foreach ($recipes as $recipe) {
-                $ingId = $recipe->ingredient_id;
-                $need = bcmul((string)$recipe->qty_usage, (string)$it['qty'], 3);
-
-                Log::info('Recipe item contribution', [
-                    'menu_id' => $it['menu_id'],
-                    'menu_name' => optional($it['menu'])->name ?? null,
-                    'ingredient_id' => $ingId,
-                    'qty_usage' => (string)$recipe->qty_usage,
-                    'qty_order' => $it['qty'],
-                    'need' => $need,
-                ]);
-
-                if (isset($requirements[$ingId])) {
-                    $requirements[$ingId] = bcadd($requirements[$ingId], $need, 3);
-                } else {
-                    $requirements[$ingId] = $need;
-                }
-
-                $requirements_meta[$ingId][] = [
-                    'menu_id' => $it['menu_id'],
-                    'menu_name' => optional($it['menu'])->name ?? null,
-                    'recipe_qty_usage' => (string)$recipe->qty_usage,
-                    'need' => $need,
-                ];
-            }
-        }
-
+        // New behavior: validate and deduct menu stock only
         try {
-            $order = \DB::transaction(function () use ($validated, $normalized, $requirements) {
-                // Lock ingredient rows first and verify availability
-                if (!empty($requirements)) {
-                    $ingredients = \App\Models\Ingredient::whereIn('id', array_keys($requirements))->lockForUpdate()->get()->keyBy('id');
-                } else {
-                    $ingredients = collect();
+            $order = \DB::transaction(function () use ($validated, $normalized) {
+                // Validate menu stock availability
+                $menuIds = array_column($normalized, 'menu_id');
+                $menus = \App\Models\Menu::whereIn('id', $menuIds)->lockForUpdate()->get()->keyBy('id');
+
+                // Build aggregated menu qty
+                $agg = [];
+                foreach ($normalized as $it) {
+                    $mid = $it['menu_id'];
+                    $agg[$mid] = ($agg[$mid] ?? 0) + $it['qty'];
                 }
 
-                // Validate stock
-                foreach ($requirements as $ingId => $need) {
-                    $ingredient = $ingredients->get($ingId);
-                    if (! $ingredient) {
-                        $meta = $requirements_meta[$ingId] ?? null;
-                        $msg = "Bahan tidak ditemukan (id: {$ingId})" . ($meta ? ' contributed by menus: ' . implode(',', array_map(function($m){return $m['menu_id'];}, $meta)) : '');
-                        Log::error($msg, ['ingredient_id' => $ingId, 'meta' => $meta]);
-                        throw new \Exception($msg);
+                foreach ($agg as $mid => $needQty) {
+                    $menu = $menus->get($mid);
+                    if (! $menu) {
+                        throw new \Exception("Menu tidak ditemukan (id: {$mid})");
                     }
-
-                    Log::info('Ingredient stock check', ['ingredient_id' => $ingId, 'stock' => (string)$ingredient->stock_quantity, 'need' => $need]);
-
-                    if (bccomp((string)$ingredient->stock_quantity, (string)$need, 3) < 0) {
-                        $msg = "Stok tidak cukup untuk bahan {$ingredient->item_name} (id: {$ingId}). Dibutuhkan: {$need}, tersedia: {$ingredient->stock_quantity}";
-                        Log::error($msg, ['ingredient_id' => $ingId, 'need' => $need, 'stock' => (string)$ingredient->stock_quantity]);
-                        throw new \Exception($msg);
+                    if ((int)$menu->stock < (int)$needQty) {
+                        throw new \Exception("Stok menu tidak cukup untuk {$menu->name}. Dibutuhkan: {$needQty}, tersedia: {$menu->stock}");
                     }
                 }
 
@@ -194,38 +145,20 @@ class PosController extends Controller
                     $total = bcadd((string)$total, bcmul((string)$it['menu']->price, (string)$it['qty'], 2), 2);
                 }
 
-                // Deduct aggregated requirements from ingredients
-                foreach ($requirements as $ingId => $need) {
-                    $ingredient = $ingredients->get($ingId);
-                    $stockBefore = (string)$ingredient->stock_quantity;
-                    $newStock = bcsub($stockBefore, (string)$need, 3);
-                    if (bccomp($newStock, '0', 3) < 0) {
-                        $msg = "Stok tidak cukup saat pengurangan untuk bahan {$ingredient->item_name} (id: {$ingId}). Dibutuhkan: {$need}, tersedia: {$stockBefore}";
-                        Log::error($msg, ['ingredient_id' => $ingId, 'need' => $need, 'stock_before' => $stockBefore]);
-                        throw new \Exception($msg);
-                    }
-
-                    Log::info('Updating ingredient stock', [
-                        'ingredient_id' => $ingId,
-                        'stock_before' => $stockBefore,
-                        'need' => $need,
-                        'stock_after' => $newStock,
-                        'meta' => $requirements_meta[$ingId] ?? null,
-                    ]);
-
-                    $ingredient->stock_quantity = $newStock;
-                    $ingredient->save();
-
-                    if (bccomp((string)$newStock, '0', 3) === 0) {
-                        $affected = \App\Models\Menu::whereHas('recipes', function ($q) use ($ingredient) {
-                            $q->where('ingredient_id', $ingredient->id);
-                        })->update(['is_available' => false]);
-                        Log::info('Marked menus unavailable due to zero stock', ['ingredient_id' => $ingId, 'affected_menus' => $affected]);
+                // Deduct menu stock
+                foreach ($agg as $mid => $needQty) {
+                    $menu = $menus->get($mid);
+                    $menu->stock = (int)$menu->stock - (int)$needQty;
+                    $menu->save();
+                    if ($menu->stock <= 0) {
+                        $menu->is_available = false;
+                        $menu->save();
                     }
                 }
 
                 $order->total_price = $total;
-                $order->status = 'paid';
+                $order->payment_status = 'paid';
+                $order->status = 'pending';
                 $order->save();
 
                 return $order;
@@ -234,7 +167,7 @@ class PosController extends Controller
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->route('pos.receipt', $order->id)->with('success', 'Pembayaran berhasil dan stok diperbarui');
+        return redirect()->route('pos.receipt', $order->id)->with('success', 'Pembayaran berhasil dan stok menu diperbarui');
     }
 
     public function show(Order $order)
@@ -261,5 +194,21 @@ class PosController extends Controller
         }
 
         return redirect()->route('pos.show', $order->id)->with('success', 'Order paid and stock updated');
+    }
+
+    public function confirmPayment(Order $order)
+    {
+        if ($order->payment_method !== 'qris') {
+            return redirect()->back()->with('error', 'Konfirmasi pembayaran hanya untuk QRIS');
+        }
+
+        if ($order->payment_status === 'paid') {
+            return redirect()->back()->with('error', 'Pembayaran sudah dikonfirmasi');
+        }
+
+        $order->payment_status = 'paid';
+        $order->save();
+
+        return redirect()->back()->with('success', 'Pembayaran QRIS berhasil dikonfirmasi');
     }
 }

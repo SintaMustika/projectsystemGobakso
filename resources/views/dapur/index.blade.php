@@ -21,13 +21,16 @@
                         <div class="d-flex justify-content-between align-items-start">
                             <div>
                                 <h5 class="card-title mb-1">Pesanan #{{ $order->id }} - Meja {{ $order->table_number ?? '-' }}</h5>
+                                <div class="text-muted small">Customer: {{ $order->customer_name ?? 'Kasir' }}</div>
                                 <small class="text-muted">{{ $order->created_at->format('d M Y H:i') }}</small>
                             </div>
                             <div class="text-end">
-                                @if($order->status === 'paid')
-                                    <span class="badge bg-primary">PAID</span>
-                                @elseif($order->status === 'processing')
+                                @if($order->status === 'processing')
                                     <span class="badge bg-warning text-dark">PROCESSING</span>
+                                @elseif($order->status === 'waiting')
+                                    <span class="badge bg-info text-dark">WAITING</span>
+                                @elseif($order->status === 'pending')
+                                    <span class="badge bg-secondary">PENDING</span>
                                 @elseif($order->status === 'completed')
                                     <span class="badge bg-success">COMPLETED</span>
                                 @else
@@ -38,8 +41,14 @@
 
                         <hr>
 
+                        @if($order->notes)
+                            <div class="alert alert-light border py-2 mb-3">
+                                <strong>Catatan:</strong> {{ $order->notes }}
+                            </div>
+                        @endif
+
                         <ul class="list-group list-group-flush mb-3">
-                            @foreach($order->details as $detail)
+                            @foreach($order->items as $detail)
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <div>
                                         <strong>{{ $detail->menu->name ?? 'Unknown' }}</strong>
@@ -55,7 +64,7 @@
                                 <strong>Total:</strong> Rp {{ number_format($order->total_price,0,',','.') }}
                             </div>
                             <div class="d-flex gap-2">
-                                @if($order->status === 'paid')
+                                @if(in_array($order->status, ['pending', 'waiting'], true))
                                     <form action="{{ route('dapur.process', $order) }}" method="POST">
                                         @csrf
                                         <button class="btn btn-sm btn-primary">Proses</button>

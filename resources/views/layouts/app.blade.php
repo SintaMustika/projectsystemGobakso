@@ -174,9 +174,9 @@
 
         <ul class="dropdown-menu dropdown-menu-end">
           <li>
-            <form method="POST" action="{{ route('logout') }}">
+            <form id="logout-form" method="POST" action="{{ route('logout') }}">
               @csrf
-              <button class="dropdown-item">Logout</button>
+              <button type="button" id="logout-button" class="dropdown-item">Logout</button>
             </form>
           </li>
         </ul>
@@ -216,6 +216,18 @@
 
         <a href="{{ route('admin.ingredients.index') }}" class="list-group-item {{ request()->routeIs('admin.ingredients.*') ? 'active' : '' }}">
           <i class="bi bi-box-seam me-2"></i> Stok
+        </a>
+
+        <a href="{{ route('admin.purchases.index') }}" class="list-group-item {{ request()->routeIs('admin.purchases.*') ? 'active' : '' }}">
+          <i class="bi bi-cart me-2"></i> Pembelian Bahan
+        </a>
+
+        <a href="{{ route('admin.productions.index') }}" class="list-group-item {{ request()->routeIs('admin.productions.*') ? 'active' : '' }}">
+          <i class="bi bi-gear me-2"></i> Produksi Menu
+        </a>
+
+        <a href="{{ route('admin.payment-settings.edit') }}" class="list-group-item {{ request()->routeIs('admin.payment-settings.*') ? 'active' : '' }}">
+          <i class="bi bi-qr-code me-2"></i> QRIS
         </a>
 
         <a href="{{ route('pos.index') }}" class="list-group-item {{ request()->routeIs('pos.*') ? 'active' : '' }}">
@@ -260,10 +272,33 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 @stack('scripts')
 
 <script>
+  (function(){
+    const logoutButton = document.getElementById('logout-button');
+    const logoutForm = document.getElementById('logout-form');
+    if(!logoutButton || !logoutForm) return;
+
+    logoutButton.addEventListener('click', function(){
+      Swal.fire({
+        title: 'Konfirmasi Logout',
+        text: 'Apakah Anda yakin ingin keluar dari sistem?',
+        icon: 'warning',
+        showCancelButton: true,
+        cancelButtonText: 'Batal',
+        confirmButtonText: 'Ya, Logout',
+        reverseButtons: true
+      }).then(function(result){
+        if(result.isConfirmed){
+          logoutForm.submit();
+        }
+      });
+    });
+  })();
+
   (function(){
     const btn = document.getElementById('sidebarToggle');
     const sidebar = document.querySelector('.sidebar');

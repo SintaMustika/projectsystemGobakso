@@ -23,16 +23,17 @@ class IngredientWebController extends Controller
     {
         $data = $request->validate([
             'item_name' => 'required|string|max:255',
-            'stock_quantity' => 'required|numeric',
             'unit' => 'nullable|in:gram,pcs,ml,liter',
             'min_stock' => 'nullable|numeric',
             'price' => 'nullable|numeric',
         ]);
 
-        // Ensure price is not null when saving to DB (DB column is NOT NULL)
+        // initialize stock to zero; stock updates only via purchases/production
         if (! array_key_exists('price', $data) || is_null($data['price'])) {
             $data['price'] = 0;
         }
+
+        $data['stock_quantity'] = 0;
 
         Ingredient::create($data);
         return redirect()->route('admin.ingredients.index')->with('success', 'Ingredient created');
@@ -47,7 +48,6 @@ class IngredientWebController extends Controller
     {
         $data = $request->validate([
             'item_name' => 'required|string|max:255',
-            'stock_quantity' => 'required|numeric',
             'unit' => 'nullable|in:gram,pcs,ml,liter',
             'min_stock' => 'nullable|numeric',
             'price' => 'nullable|numeric',
@@ -57,6 +57,9 @@ class IngredientWebController extends Controller
         if (! array_key_exists('price', $data) || is_null($data['price'])) {
             $data['price'] = $ingredient->price ?? 0;
         }
+
+        // do not allow editing stock here; keep existing stock_quantity
+        unset($data['stock_quantity']);
 
         $ingredient->update($data);
         return redirect()->route('admin.ingredients.index')->with('success', 'Ingredient updated');

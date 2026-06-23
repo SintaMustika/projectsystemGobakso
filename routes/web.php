@@ -5,9 +5,12 @@ use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\MenuWebController;
 use App\Http\Controllers\Web\IngredientWebController;
+use App\Http\Controllers\Web\PurchaseController;
 use App\Http\Controllers\Web\PosController;
 use App\Http\Controllers\Web\ReportController;
 use App\Http\Controllers\KitchenController;
+use App\Http\Controllers\Web\ProductionController;
+use App\Http\Controllers\Web\PaymentSettingController;
 
 /*
 |--------------------------------------------------------------------------
@@ -80,6 +83,16 @@ Route::prefix('admin')->name('admin.')->middleware(['auth','role:admin'])->group
 	// INGREDIENT
 	Route::resource('ingredients', IngredientWebController::class);
 
+	// PURCHASES
+	Route::resource('purchases', PurchaseController::class);
+
+	// PRODUCTIONS (menu production)
+	Route::resource('productions', ProductionController::class);
+
+	// PAYMENT SETTINGS
+	Route::get('payment-settings', [PaymentSettingController::class, 'edit'])->name('payment-settings.edit');
+	Route::put('payment-settings', [PaymentSettingController::class, 'update'])->name('payment-settings.update');
+
 	// ✅ REPORT (INI YANG PENTING)
 	Route::get('reports/sales', [ReportController::class, 'index'])->name('reports.sales'); // <-- FIX
 	Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
@@ -100,6 +113,7 @@ Route::prefix('pos')->name('pos.')->middleware(['auth','role:admin,kasir'])->gro
 
 	Route::get('/{order}', [PosController::class, 'show'])->name('show');
 	Route::post('/{order}/pay', [PosController::class, 'pay'])->name('pay');
+	Route::post('/{order}/confirm-payment', [PosController::class, 'confirmPayment'])->name('confirmPayment');
 });
 
 /*

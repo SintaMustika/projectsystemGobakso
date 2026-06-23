@@ -9,7 +9,13 @@ class OrderDetail extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['order_id', 'menu_id', 'qty', 'price'];
+    protected $fillable = ['order_id', 'menu_id', 'qty', 'price', 'capital_price', 'profit'];
+
+    protected $casts = [
+        'price' => 'decimal:2',
+        'capital_price' => 'decimal:2',
+        'profit' => 'decimal:2',
+    ];
 
     public function order()
     {
